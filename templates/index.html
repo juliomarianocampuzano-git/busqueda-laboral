@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ofertas para mi CV</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main>
+    <h1>Ofertas para mi CV</h1>
+    <p class="lead">Subí tu CV y buscamos ofertas activas en RemoteOK que encajen con tu perfil.</p>
+    <p class="source">Fuente: API pública RemoteOK (<code>https://remoteok.com/api</code>)</p>
+    <form id="form" class="card">
+      <label>Texto del CV<textarea name="cv_text" rows="8" placeholder="Pegá acá tu CV..."></textarea></label>
+      <label>O subí un PDF<input type="file" name="cv_file" accept=".pdf,.txt" /></label>
+      <button type="submit">Buscar ofertas reales</button>
+    </form>
+    <p id="status" class="status"></p>
+    <section id="results"></section>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>

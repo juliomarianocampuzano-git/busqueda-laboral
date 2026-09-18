@@ -1,0 +1,10 @@
+
+:root { font-family: system-ui, sans-serif; color: #1a1a1a; }
+body { margin: 0; background: #f4f1ea; }
+main { max-width: 860px; margin: 2rem auto; padding: 0 1rem 3rem; }
+.card { background: #fff; padding: 1rem; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.08); display: grid; gap: .8rem; }
+textarea, input, button { font: inherit; width: 100%; padding: .6rem; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; }
+button { background: #1d4f91; color: #fff; border: none; cursor: pointer; }
+.lead,.source { color: #555; }
+.offer { background: #fff; margin: 1rem 0; padding: 1rem; border-radius: 12px; }
+.offer a { color: #1d4f91; font-weight: 600; }

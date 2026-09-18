@@ -1,0 +1,5 @@
+Julio Mariano Campuzano
+Data Analyst & AI Automation
+Python, SQL, Pandas, Power BI, Flask, HTML, JavaScript, SQLite, Git, Docker
+Experiencia en automatizacion de procesos, dashboards, KPIs y APIs REST.
+Busco roles remote junior/mid en data analytics, automation o backend Python.
