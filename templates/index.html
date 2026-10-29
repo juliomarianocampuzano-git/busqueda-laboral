@@ -1,24 +1,78 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Ofertas para mi CV</title>
-  <link rel="stylesheet" href="/static/style.css" />
-</head>
-<body>
-  <main>
-    <h1>Ofertas para mi CV</h1>
-    <p class="lead">Subí tu CV y buscamos ofertas activas en RemoteOK que encajen con tu perfil.</p>
-    <p class="source">Fuente: API pública RemoteOK (<code>https://remoteok.com/api</code>)</p>
-    <form id="form" class="card">
-      <label>Texto del CV<textarea name="cv_text" rows="8" placeholder="Pegá acá tu CV..."></textarea></label>
-      <label>O subí un PDF<input type="file" name="cv_file" accept=".pdf,.txt" /></label>
-      <button type="submit">Buscar ofertas reales</button>
-    </form>
-    <p id="status" class="status"></p>
-    <section id="results"></section>
-  </main>
-  <script src="/static/app.js"></script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Búsqueda laboral</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css') }}"
+    />
+    <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+  </head>
+  <body data-demo="{{ 'true' if demo else 'false' }}">
+    <main>
+      <header>
+        <p class="etiqueta">CV Y AVISOS DE EMPLEO</p>
+        <h1>Búsqueda laboral</h1>
+        <p>Compará tu CV con los avisos y revisá las coincidencias.</p>
+      </header>
+      {% if demo %}
+      <p class="aviso">
+        Estás viendo datos ficticios para probar la app. No se consulta RemoteOK
+        ni se realizan postulaciones.
+      </p>
+      {% endif %}
+      <div class="columnas">
+        <section class="tarjeta" aria-labelledby="cv-title">
+          <h2 id="cv-title">Tu CV</h2>
+          <form id="form">
+            <label for="cv-text">Pegá el texto</label
+            ><textarea
+              id="cv-text"
+              name="cv_text"
+              rows="12"
+              minlength="40"
+              maxlength="50000"
+              placeholder="Experiencia, conocimientos y herramientas que usás"
+            ></textarea>
+            <label for="cv-file">O subí un archivo PDF o TXT</label
+            ><input
+              id="cv-file"
+              type="file"
+              name="cv_file"
+              accept=".pdf,.txt"
+            />
+            <p class="ayuda">
+              Hasta 1 MB y 10 páginas. El archivo y el texto del CV no se
+              guardan con los resultados.
+            </p>
+            <button id="buscar" type="submit">Buscar avisos</button>
+            <button id="ejemplo" type="button" class="secundario">
+              Usar un CV de ejemplo
+            </button>
+          </form>
+        </section>
+        <section class="tarjeta" aria-labelledby="avisos-title">
+          <div class="cabecera">
+            <h2 id="avisos-title">Avisos</h2>
+            <span class="origen">{{ 'Ejemplos' if demo else 'RemoteOK' }}</span>
+          </div>
+          <p id="status" role="status" aria-live="polite">
+            Cargá el CV para buscar coincidencias.
+          </p>
+          <p id="error" class="error" role="alert" hidden></p>
+          <div id="results" aria-busy="false"></div>
+        </section>
+      </div>
+      <footer>
+        {% if not demo %}
+        Fuente:
+        <a href="https://remoteok.com" target="_blank" rel="noopener noreferrer"
+          >RemoteOK</a
+        >. {% endif %} El orden se basa en palabras y habilidades compartidas. Un enlace que
+        abre no asegura que la vacante siga disponible.
+      </footer>
+    </main>
+  </body>
 </html>

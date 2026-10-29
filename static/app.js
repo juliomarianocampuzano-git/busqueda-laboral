@@ -1,26 +1,116 @@
+"use strict";
+const byId = (id) => document.getElementById(id);
+const form = byId("form");
+const results = byId("results");
+const status = byId("status");
+const error = byId("error");
+const demo = document.body.dataset.demo === "true";
+const node = (tag, text, style) => {
+  const element = document.createElement(tag);
+  element.textContent = text;
+  if (style) element.className = style;
+  return element;
+};
 
-const form = document.getElementById("form");
-const statusEl = document.getElementById("status");
-const results = document.getElementById("results");
-form.addEventListener("submit", async (ev) => {
-  ev.preventDefault();
-  statusEl.textContent = "Consultando RemoteOK y verificando apply_url...";
-  results.innerHTML = "";
-  const res = await fetch("/api/match", { method: "POST", body: new FormData(form) });
-  const data = await res.json();
-  statusEl.textContent = data.message || "";
-  if (!data.matches || !data.matches.length) {
-    results.innerHTML = "<p>0 matches encontrados</p>";
+byId("ejemplo").addEventListener("click", () => {
+  byId("cv-text").value =
+    "Analista de datos. Conocimientos de Python, SQL y Excel. Preparación de reportes, limpieza de datos con pandas y consultas en SQLite.";
+  byId("cv-file").value = "";
+  byId("cv-text").focus();
+});
+
+function showMatches(matches) {
+  results.replaceChildren();
+  for (const match of matches) {
+    const article = document.createElement("article");
+    article.className = "oferta";
+    article.append(node("h3", match.position || "Aviso sin título"));
+    article.append(
+      node(
+        "p",
+        [match.company, match.location].filter(Boolean).join(" · "),
+        "empresa",
+      ),
+    );
+    const skills = match.why?.shared_skills || [];
+    article.append(
+      node(
+        "p",
+        skills.length
+          ? "Coincide en: " + skills.join(", ")
+          : "Coincide en algunas palabras del CV.",
+        "coincidencias",
+      ),
+    );
+    article.append(
+      node(
+        "span",
+        demo
+          ? "Datos ficticios"
+          : "Enlace " + (match.link_status || "sin verificar"),
+        "estado",
+      ),
+    );
+    if (!demo) {
+      try {
+        const url = new URL(match.apply_url);
+        if (url.protocol === "https:" && !url.username && !url.password) {
+          const link = node("a", "Ver aviso");
+          link.href = url.href;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          article.append(link);
+        }
+      } catch {
+        /* Un aviso con enlace inválido no se muestra como enlace. */
+      }
+    }
+    results.append(article);
+  }
+}
+
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  error.hidden = true;
+  error.textContent = "";
+  const upload = byId("cv-file").files[0];
+  if (upload && upload.size > 1048576) {
+    error.textContent = "El archivo no puede superar 1 MB.";
+    error.hidden = false;
     return;
   }
-  results.innerHTML = data.matches.map((m) => `
-    <article class="offer">
-      <h2>${m.position || "(sin título)"}</h2>
-      <p><strong>${m.company || ""}</strong> · ${m.location || ""} · afinidad ${m.affinity}</p>
-      <p>Por qué: skills ${(m.why?.shared_skills || []).join(", ") || "pocas explícitas"};
-         seniority ${m.why?.seniority_signal}; modalidad ${m.why?.modality};
-         similitud ${m.why?.tfidf_similarity}</p>
-      <p>Tags: ${(m.tags || []).join(", ")}</p>
-      <p><a href="${m.apply_url}" target="_blank" rel="noopener">Postularme (apply_url original)</a></p>
-    </article>`).join("");
+  const button = byId("buscar");
+  button.disabled = true;
+  button.textContent = "Buscando…";
+  results.setAttribute("aria-busy", "true");
+  status.textContent = "Consultando los avisos. Puede tardar unos segundos.";
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 22000);
+  try {
+    const response = await fetch("/api/match", {
+      method: "POST",
+      body: new FormData(form),
+      signal: controller.signal,
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data)
+      throw new Error(data?.error || "No se pudo completar la consulta.");
+    showMatches(data.matches || []);
+    status.textContent = data.matches?.length
+      ? data.message
+      : "No se encontraron avisos con coincidencias para este CV.";
+  } catch (failure) {
+    results.replaceChildren();
+    status.textContent = "";
+    error.textContent =
+      failure.name === "AbortError"
+        ? "La consulta tardó demasiado. Probá de nuevo más tarde."
+        : failure.message;
+    error.hidden = false;
+  } finally {
+    clearTimeout(timer);
+    button.disabled = false;
+    button.textContent = "Buscar avisos";
+    results.setAttribute("aria-busy", "false");
+  }
 });

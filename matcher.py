@@ -1,53 +1,96 @@
-"""Semantic-ish matching via TF-IDF cosine + skill overlap."""
+"""Ordenar avisos por palabras y habilidades compartidas."""
+
 from __future__ import annotations
+
+import html
 import re
-from typing import Any
+
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 SKILLS = {
-    "python","sql","javascript","typescript","react","node","django","flask","fastapi",
-    "pandas","numpy","excel","power bi","aws","azure","docker","kubernetes","git","linux",
-    "html","css","java","go","golang","php","pytest","machine learning","data analysis",
-    "etl","postgres","mysql","sqlite","mongodb","rest","api","ci/cd","automation",
+    "python",
+    "sql",
+    "javascript",
+    "typescript",
+    "react",
+    "node",
+    "django",
+    "flask",
+    "fastapi",
+    "pandas",
+    "numpy",
+    "excel",
+    "power bi",
+    "aws",
+    "azure",
+    "docker",
+    "kubernetes",
+    "git",
+    "linux",
+    "html",
+    "css",
+    "java",
+    "go",
+    "golang",
+    "php",
+    "pytest",
+    "machine learning",
+    "data analysis",
+    "etl",
+    "postgres",
+    "mysql",
+    "sqlite",
+    "mongodb",
+    "rest",
+    "api",
+    "ci/cd",
+    "automation",
 }
 
 
 def _clean(text: str) -> str:
-    return re.sub(r"<[^>]+>", " ", text or "").lower()
+    return html.unescape(re.sub(r"<[^>]+>", " ", text or "")).lower()
 
 
 def extract_skills(text: str) -> set[str]:
-    t = _clean(text)
-    return {s for s in SKILLS if s in t}
+    text = _clean(text)
+    return {skill for skill in SKILLS if re.search(r"(?<!\w)" + re.escape(skill) + r"(?!\w)", text)}
 
 
-def job_doc(job: dict[str, Any]) -> str:
-    return f"{job.get('position','')} {' '.join(job.get('tags') or [])} {job.get('description','')}"
+def job_doc(job: dict) -> str:
+    tags = job.get("tags") or []
+    return _clean(f"{job.get('position', '')} {' '.join(tags)} {job.get('description', '')}")
 
 
-def score_jobs(cv_text: str, jobs: list[dict[str, Any]], top_k: int = 20) -> list[dict[str, Any]]:
-    if not jobs:
+def score_jobs(cv_text: str, jobs: list[dict], top_k: int = 20) -> list[dict]:
+    if not jobs or top_k <= 0:
         return []
-    docs = [cv_text] + [job_doc(j) for j in jobs]
-    matrix = TfidfVectorizer(stop_words="english", max_features=5000, ngram_range=(1, 2)).fit_transform(docs)
-    sims = cosine_similarity(matrix[0:1], matrix[1:]).ravel()
+    docs = [_clean(cv_text)] + [job_doc(job) for job in jobs]
+    try:
+        matrix = TfidfVectorizer(
+            stop_words="english", max_features=5000, ngram_range=(1, 2)
+        ).fit_transform(docs)
+        similarities = cosine_similarity(matrix[0:1], matrix[1:]).ravel()
+    except ValueError:
+        similarities = [0.0] * len(jobs)
     cv_skills = extract_skills(cv_text)
-    out = []
-    for job, sim in zip(jobs, sims):
+    results = []
+    for job, similarity in zip(jobs, similarities):
         shared = sorted(cv_skills & extract_skills(job_doc(job)))
-        text = _clean(job_doc(job))
-        seniority = "senior" if "senior" in text else ("junior" if "junior" in text else "no indicado")
-        modality = "remote" if "remote" in text or "remote" in _clean(str(job.get("location") or "")) else (job.get("location") or "no indicada")
-        out.append({
-            **job,
-            "affinity": round(float(sim) + 0.03 * len(shared), 4),
-            "why": {
-                "shared_skills": shared,
-                "seniority_signal": seniority,
-                "modality": modality,
-                "tfidf_similarity": round(float(sim), 4),
-            },
-        })
-    out.sort(key=lambda x: x["affinity"], reverse=True)
-    return out[:top_k]
+        overlap = len(shared) / len(cv_skills) if cv_skills else 0
+        score = min(1.0, 0.8 * float(similarity) + 0.2 * overlap)
+        if score <= 0:
+            continue
+        results.append(
+            {
+                **job,
+                "affinity": round(score, 4),
+                "why": {
+                    "shared_skills": shared,
+                    "tfidf_similarity": round(float(similarity), 4),
+                },
+            }
+        )
+    results.sort(key=lambda job: (-job["affinity"], str(job.get("id", ""))))
+    return results[:top_k]

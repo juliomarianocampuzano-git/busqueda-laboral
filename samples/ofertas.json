@@ -1,0 +1,29 @@
+[
+  {
+    "id": "demo-1",
+    "position": "Analista de datos",
+    "company": "Empresa de ejemplo",
+    "location": "Remoto",
+    "tags": ["python", "sql", "excel"],
+    "description": "Análisis de datos con Python, SQL y Excel. Preparación de reportes y consultas.",
+    "apply_url": "https://example.com/empleo-1"
+  },
+  {
+    "id": "demo-2",
+    "position": "Desarrollo Python",
+    "company": "Equipo de ejemplo",
+    "location": "Remoto",
+    "tags": ["python", "flask", "pytest"],
+    "description": "Desarrollo de aplicaciones con Python y Flask, pruebas con pytest y bases SQL.",
+    "apply_url": "https://example.com/empleo-2"
+  },
+  {
+    "id": "demo-3",
+    "position": "Administración y reportes",
+    "company": "Comercio de ejemplo",
+    "location": "Remoto",
+    "tags": ["excel", "sql"],
+    "description": "Registro de operaciones y reportes en Excel y SQL.",
+    "apply_url": "https://example.com/empleo-3"
+  }
+]

@@ -1,79 +1,133 @@
-"""Ofertas para mi CV — RemoteOK matcher."""
+"""Búsqueda laboral: comparar un CV con avisos de RemoteOK."""
+
 from __future__ import annotations
+
+import argparse
+import json
+import os
 from pathlib import Path
-from flask import Flask, jsonify, render_template, request
-from cv_parser import load_cv_text
+
+import click
+from flask import Flask, current_app, jsonify, render_template, request
+
+from cv_parser import MAX_BYTES, MAX_TEXT, load_cv_bytes
 from db import Store
 from matcher import score_jobs
-from remoteok_client import apply_url_is_alive, fetch_jobs
+from remoteok_client import RemoteOKClient, UpstreamError
 
 ROOT = Path(__file__).resolve().parent
-DB_PATH = ROOT / "data" / "ofertas.db"
-app = Flask(__name__)
-store = Store(DB_PATH)
 
 
-@app.get("/")
-def index():
-    return render_template("index.html")
+class DemoClient:
+    def get_jobs(self):
+        return json.loads((ROOT / "samples" / "ofertas.json").read_text(encoding="utf-8"))
+
+    def verify_links(self, ranked, limit=10, budget=8):
+        return [{**job, "link_status": "ejemplo"} for job in ranked[:limit]]
 
 
-@app.post("/api/match")
-def match():
-    cv_text = ""
-    if "cv_file" in request.files and request.files["cv_file"].filename:
-        f = request.files["cv_file"]
-        tmp = ROOT / "data" / f"upload_{Path(f.filename).name}"
-        f.save(tmp)
+def create_app(db_path=None, provider=None, test_config=None):
+    app = Flask(__name__)
+    app.config.from_mapping(
+        DATABASE=str(
+            db_path or os.environ.get("BUSQUEDA_DATABASE") or ROOT / "data" / "busqueda.db"
+        ),
+        MAX_CONTENT_LENGTH=MAX_BYTES + 65536,
+        DEMO=False,
+    )
+    if test_config:
+        app.config.update(test_config)
+    app.extensions["store"] = Store(Path(app.config["DATABASE"]))
+    app.extensions["provider"] = provider or (
+        DemoClient() if app.config["DEMO"] else RemoteOKClient()
+    )
+
+    @app.after_request
+    def headers(response):
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self'; style-src 'self'; "
+            "object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+        )
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @app.errorhandler(413)
+    def too_large(_):
+        return jsonify(error="El archivo no puede superar 1 MB."), 413
+
+    @app.get("/")
+    def index():
+        return render_template("index.html", demo=app.config["DEMO"])
+
+    @app.post("/api/match")
+    def match():
         try:
-            cv_text = load_cv_text(tmp)
-        finally:
-            tmp.unlink(missing_ok=True)
-    else:
-        data = request.get_json(silent=True) or {}
-        cv_text = request.form.get("cv_text") or data.get("cv_text") or ""
-    cv_text = (cv_text or "").strip()
-    if len(cv_text) < 40:
-        return jsonify({"error": "CV demasiado corto", "matches": [], "message": "0 matches encontrados"}), 400
+            upload = request.files.get("cv_file")
+            if upload and upload.filename:
+                cv_text = load_cv_bytes(
+                    upload.stream.read(MAX_BYTES + 1), Path(upload.filename).suffix
+                )
+            else:
+                data = request.get_json(silent=True) if request.is_json else request.form
+                if not isinstance(data, dict) and not hasattr(data, "get"):
+                    raise ValueError("Enviá el texto del CV o un archivo PDF/TXT.")
+                cv_text = (data or {}).get("cv_text", "")
+            if not isinstance(cv_text, str):
+                raise ValueError("El CV tiene que ser texto.")
+            cv_text = cv_text.strip()
+            if not 40 <= len(cv_text) <= MAX_TEXT:
+                raise ValueError("El CV debe tener entre 40 y 50.000 caracteres.")
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
+        try:
+            client = current_app.extensions["provider"]
+            jobs = client.get_jobs()
+            ranked = score_jobs(cv_text, jobs, top_k=20)
+            results = client.verify_links(ranked)
+        except UpstreamError as exc:
+            return jsonify(error=str(exc)), 503
+        safe = [
+            {
+                key: job.get(key)
+                for key in (
+                    "id",
+                    "position",
+                    "company",
+                    "location",
+                    "tags",
+                    "apply_url",
+                    "affinity",
+                    "why",
+                    "link_status",
+                )
+            }
+            for job in results
+        ]
+        sid = current_app.extensions["store"].save_search(safe)
+        return jsonify(
+            source="Datos ficticios" if app.config["DEMO"] else "RemoteOK",
+            demo=app.config["DEMO"],
+            search_id=sid,
+            matches=safe,
+            message=f"{len(safe)} avisos encontrados",
+        )
 
-    jobs = fetch_jobs()
-    ranked = score_jobs(cv_text, jobs, top_k=40)
-    verified = []
-    for job in ranked:
-        url = job.get("apply_url")
-        if url and apply_url_is_alive(url):
-            verified.append(job)
-        if len(verified) >= 10:
-            break
+    @app.cli.command("borrar-textos-cv")
+    def clear_previews():
+        """Borrar fragmentos de CV guardados por la versión anterior."""
+        total = current_app.extensions["store"].clear_cv_previews()
+        click.echo(f"Se borraron {total} fragmentos de CV de búsquedas anteriores.")
 
-    if not verified:
-        store.save_search(cv_text, [])
-        return jsonify({
-            "source": "RemoteOK API (https://remoteok.com/api)",
-            "matches": [],
-            "message": "0 matches encontrados",
-        })
-
-    sid = store.save_search(cv_text, verified)
-    safe = [{
-        "id": m.get("id"),
-        "position": m.get("position"),
-        "company": m.get("company"),
-        "location": m.get("location"),
-        "tags": m.get("tags"),
-        "apply_url": m.get("apply_url"),
-        "salary_min": m.get("salary_min"),
-        "salary_max": m.get("salary_max"),
-        "affinity": m.get("affinity"),
-        "why": m.get("why"),
-    } for m in verified]
-    return jsonify({
-        "source": "RemoteOK API (https://remoteok.com/api)",
-        "search_id": sid,
-        "matches": safe,
-        "message": f"{len(safe)} matches encontrados",
-    })
+    return app
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5055)
+    parser = argparse.ArgumentParser(description="Búsqueda laboral")
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help="probar con ofertas ficticias y sin consultas externas",
+    )
+    args = parser.parse_args()
+    create_app(test_config={"DEMO": args.demo}).run(host="127.0.0.1", port=5055, debug=False)

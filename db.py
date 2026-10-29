@@ -1,21 +1,23 @@
-"""SQLite persistence for searches and offers."""
+"""Guardar resultados sin copiar el texto del CV."""
+
 from __future__ import annotations
+
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
-from typing import Any
 
 
 class Store:
     def __init__(self, path: Path):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self._conn() as c:
-            c.executescript("""
+        with closing(self._conn()) as conn, conn:
+            conn.executescript("""
             CREATE TABLE IF NOT EXISTS searches (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               created_at TEXT NOT NULL DEFAULT (datetime('now')),
-              cv_preview TEXT NOT NULL,
+              cv_preview TEXT NOT NULL DEFAULT '',
               matches_count INTEGER NOT NULL
             );
             CREATE TABLE IF NOT EXISTS offers (
@@ -31,22 +33,33 @@ class Store:
             );
             """)
 
-    def _conn(self) -> sqlite3.Connection:
+    def _conn(self):
         conn = sqlite3.connect(self.path)
-        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
         return conn
 
-    def save_search(self, cv_text: str, matches: list[dict[str, Any]]) -> int:
-        with self._conn() as c:
-            cur = c.execute(
-                "INSERT INTO searches(cv_preview, matches_count) VALUES (?, ?)",
-                (cv_text[:500], len(matches)),
-            )
-            sid = int(cur.lastrowid)
-            for m in matches:
-                c.execute(
-                    "INSERT INTO offers(search_id, remoteok_id, position, company, apply_url, affinity, why_json) VALUES (?,?,?,?,?,?,?)",
-                    (sid, str(m.get("id")), m.get("position"), m.get("company"), m.get("apply_url"), m.get("affinity"), json.dumps(m.get("why") or {}, ensure_ascii=False)),
+    def save_search(self, matches: list[dict]) -> int:
+        with closing(self._conn()) as conn, conn:
+            sid = conn.execute(
+                "INSERT INTO searches(cv_preview, matches_count) VALUES ('', ?)",
+                (len(matches),),
+            ).lastrowid
+            for job in matches:
+                conn.execute(
+                    "INSERT INTO offers(search_id,remoteok_id,position,company,apply_url,affinity,why_json) "
+                    "VALUES (?,?,?,?,?,?,?)",
+                    (
+                        sid,
+                        str(job.get("id")),
+                        job.get("position"),
+                        job.get("company"),
+                        job["apply_url"],
+                        job.get("affinity"),
+                        json.dumps(job.get("why") or {}, ensure_ascii=False),
+                    ),
                 )
-            c.commit()
-            return sid
+        return int(sid)
+
+    def clear_cv_previews(self) -> int:
+        with closing(self._conn()) as conn, conn:
+            return conn.execute("UPDATE searches SET cv_preview='' WHERE cv_preview<>''").rowcount
