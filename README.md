@@ -2,9 +2,16 @@
 
 [![Tests](https://github.com/juliomarianocampuzano-git/busqueda-laboral/actions/workflows/ci.yml/badge.svg)](https://github.com/juliomarianocampuzano-git/busqueda-laboral/actions/workflows/ci.yml)
 
-Compara un CV con avisos de RemoteOK y muestra coincidencias de palabras y habilidades. Podés pegar el texto o subir un PDF/TXT.
+Compara un CV con avisos de RemoteOK, muestra las habilidades que coinciden y te deja llevar el seguimiento de cada postulación: guardada, postulada, entrevista, oferta o descartada. Podés pegar el texto del CV o subir un PDF/TXT.
 
 ![Ejemplo con avisos ficticios](docs/demo.jpg)
+
+<details>
+<summary>Vista en celular</summary>
+
+<img src="docs/demo-celular.jpg" alt="La misma app en una pantalla de 390 px" width="320">
+
+</details>
 
 ## Cómo usarla
 
@@ -16,7 +23,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe app.py
 ```
 
-Abrí http://127.0.0.1:5055. En Linux o macOS usá `.venv/bin/python` en lugar de `..venvScriptspython.exe`.
+Abrí http://127.0.0.1:5055. En Linux o macOS usá `.venv/bin/python` en lugar de `.\.venv\Scripts\python.exe`.
 
 ## Probar sin consultar ofertas reales
 
@@ -25,6 +32,25 @@ python app.py --demo
 ```
 
 Tocá **Usar un CV de ejemplo** y después **Buscar avisos**. La app muestra tres avisos ficticios incluidos en `samples/ofertas.json`. En este modo no hay enlaces de postulación ni llamadas a RemoteOK.
+
+## Seguimiento de postulaciones
+
+Cada aviso tiene el botón **Guardar en mis postulaciones**. Abajo, en **Mis postulaciones**, podés:
+
+- Cambiar el estado: guardada, postulada, entrevista, oferta o descartada.
+- Anotar contacto, fechas o próximos pasos. Se guardan al salir del campo.
+- Ver cuántas hay en cada estado y quitar las que ya no te interesan.
+- Descargar todo en CSV (UTF-8, listo para abrir en una planilla).
+
+Si guardás el mismo aviso dos veces, no se duplica. Las postulaciones se guardan en la misma base local que los resultados; no se envía nada a las empresas.
+
+| Método | Ruta                     | Qué hace                                  |
+| ------ | ------------------------ | ----------------------------------------- |
+| GET    | /api/postulaciones       | Lista, con la cantidad por estado         |
+| POST   | /api/postulaciones       | Guarda un aviso (`position`, `company`, `apply_url`) |
+| PATCH  | /api/postulaciones/1     | Cambia `status` o `notes`                 |
+| DELETE | /api/postulaciones/1     | Quita una postulación                     |
+| GET    | /api/postulaciones.csv   | Descarga el CSV                           |
 
 ## Qué hace con el CV
 
@@ -77,7 +103,7 @@ python -m pytest -q -m integration
 
 ## Alcance
 
-Es una app para uso local. No envía postulaciones, no modifica el CV y no tiene cuentas de usuario. Escucha en tu computadora, con el depurador apagado.
+Es una app para uso local. Lleva el registro de tus postulaciones, pero no las envía, no modifica el CV y no tiene cuentas de usuario. Escucha en tu computadora, con el depurador apagado.
 
 ## Licencia
 

@@ -31,6 +31,18 @@ class Store:
               why_json TEXT,
               FOREIGN KEY(search_id) REFERENCES searches(id)
             );
+            CREATE TABLE IF NOT EXISTS applications (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              created_at TEXT NOT NULL DEFAULT (datetime('now')),
+              updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+              position TEXT NOT NULL,
+              company TEXT NOT NULL DEFAULT '',
+              apply_url TEXT NOT NULL DEFAULT '',
+              status TEXT NOT NULL DEFAULT 'guardada',
+              notes TEXT NOT NULL DEFAULT ''
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS applications_url
+              ON applications(apply_url) WHERE apply_url <> '';
             """)
 
     def _conn(self):
@@ -59,6 +71,48 @@ class Store:
                     ),
                 )
         return int(sid)
+
+    # ---------- postulaciones ----------
+    def _application(self, conn, app_id: int) -> dict | None:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("SELECT * FROM applications WHERE id = ?", (app_id,)).fetchone()
+        return dict(row) if row else None
+
+    def list_applications(self) -> list[dict]:
+        with closing(self._conn()) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("SELECT * FROM applications ORDER BY updated_at DESC, id DESC")
+            return [dict(row) for row in rows]
+
+    def add_application(self, position: str, company: str, apply_url: str) -> tuple[dict, bool]:
+        """Guardar un aviso. Si el enlace ya estaba guardado, devuelve el existente."""
+        with closing(self._conn()) as conn, conn:
+            if apply_url:
+                found = conn.execute(
+                    "SELECT id FROM applications WHERE apply_url = ?", (apply_url,)
+                ).fetchone()
+                if found:
+                    return self._application(conn, found[0]), False
+            app_id = conn.execute(
+                "INSERT INTO applications(position, company, apply_url) VALUES (?, ?, ?)",
+                (position, company, apply_url),
+            ).lastrowid
+            return self._application(conn, app_id), True
+
+    def update_application(self, app_id: int, changes: dict) -> dict | None:
+        fields = {key: changes[key] for key in ("status", "notes") if key in changes}
+        with closing(self._conn()) as conn, conn:
+            if fields:
+                sets = ", ".join(f"{key} = ?" for key in fields)
+                conn.execute(
+                    f"UPDATE applications SET {sets}, updated_at = datetime('now') WHERE id = ?",
+                    (*fields.values(), app_id),
+                )
+            return self._application(conn, app_id)
+
+    def delete_application(self, app_id: int) -> bool:
+        with closing(self._conn()) as conn, conn:
+            return conn.execute("DELETE FROM applications WHERE id = ?", (app_id,)).rowcount > 0
 
     def clear_cv_previews(self) -> int:
         with closing(self._conn()) as conn, conn:

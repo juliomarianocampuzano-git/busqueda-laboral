@@ -65,6 +65,20 @@
           <div id="results" aria-busy="false"></div>
         </section>
       </div>
+      <section class="tarjeta postulaciones" aria-labelledby="post-title">
+        <div class="cabecera">
+          <h2 id="post-title">Mis postulaciones</h2>
+          <a id="exportar" class="boton-link" href="/api/postulaciones.csv"
+            >Exportar CSV</a
+          >
+        </div>
+        <p class="ayuda">
+          Guardá los avisos que te interesan y anotá en qué etapa está cada uno.
+          Se guardan en la base local de esta app.
+        </p>
+        <ul id="contadores" class="contadores" aria-label="Postulaciones por estado"></ul>
+        <ul id="lista-post" class="lista-post" aria-live="polite"></ul>
+      </section>
       <footer>
         {% if not demo %}
         Fuente:

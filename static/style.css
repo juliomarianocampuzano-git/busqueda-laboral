@@ -180,6 +180,123 @@ textarea:focus-visible {
 .oferta {
   overflow-wrap: anywhere;
 }
+.oferta .guardar {
+  margin-top: 12px;
+  padding: 8px 12px;
+}
+.oferta .guardar.hecho {
+  background: #eff4ea;
+  color: #42654d;
+  cursor: default;
+}
+.postulaciones {
+  margin-top: 24px;
+}
+.boton-link {
+  align-self: start;
+  padding: 8px 12px;
+  border: 1px solid #dce6d4;
+  border-radius: 7px;
+  background: #eff4ea;
+  color: #2b6348;
+  font-size: 12px;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.contadores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+.contadores li {
+  padding: 4px 10px;
+  border-radius: 15px;
+  background: #f0f5eb;
+  font-size: 12px;
+}
+.contadores strong {
+  margin-right: 4px;
+}
+.lista-post {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.post {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 170px;
+  gap: 10px 18px;
+  border-top: 1px solid #e5eadd;
+  padding: 18px 0;
+  overflow-wrap: anywhere;
+}
+.post h3 {
+  margin: 0;
+}
+.post .empresa a {
+  color: #2b6348;
+  font-weight: 650;
+}
+.post select {
+  font: inherit;
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid #d4dfd0;
+  border-radius: 7px;
+  background: #fcfdfb;
+  color: #263d35;
+}
+.post textarea {
+  grid-column: 1 / -1;
+  min-height: 64px;
+  font-size: 13px;
+}
+.post .acciones {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.post .acciones small {
+  color: #7b897c;
+  font-size: 11px;
+}
+.borrar {
+  padding: 8px 12px;
+  background: #fff1ec;
+  color: #943d31;
+  border: 1px solid #f3d6cc;
+}
+.vacio {
+  color: #7b897c;
+  font-size: 13px;
+  border-top: 1px solid #e5eadd;
+  padding-top: 16px;
+}
+select:focus-visible {
+  outline: 3px solid #b89952;
+  outline-offset: 3px;
+}
+@media (max-width: 760px) {
+  .post {
+    grid-template-columns: 1fr;
+  }
+  textarea,
+  input,
+  select {
+    font-size: 16px;
+  }
+  button,
+  .boton-link {
+    min-height: 44px;
+  }
+}
 @media (max-width: 760px) {
   main {
     padding: 30px 17px;

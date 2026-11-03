@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import csv
+import io
 import json
 import os
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import click
-from flask import Flask, current_app, jsonify, render_template, request
+from flask import Flask, Response, current_app, jsonify, render_template, request
 
 from cv_parser import MAX_BYTES, MAX_TEXT, load_cv_bytes
 from db import Store
@@ -16,6 +19,45 @@ from matcher import score_jobs
 from remoteok_client import RemoteOKClient, UpstreamError
 
 ROOT = Path(__file__).resolve().parent
+STATUSES = ("guardada", "postulada", "entrevista", "oferta", "descartada")
+
+
+def text_field(data: dict, key: str, limit: int, *, required: bool = False) -> str:
+    value = data.get(key, "")
+    if not isinstance(value, str):
+        raise ValueError(f"El campo {key} tiene que ser texto.")
+    value = value.strip()
+    if required and not value:
+        raise ValueError(f"Falta el campo {key}.")
+    if len(value) > limit:
+        raise ValueError(f"El campo {key} admite hasta {limit} caracteres.")
+    return value
+
+
+def clean_url(value: str) -> str:
+    """Solo enlaces https sin usuario ni contraseña; vacío si el aviso no tiene enlace."""
+    if not value:
+        return ""
+    parts = urlsplit(value)
+    if parts.scheme != "https" or not parts.hostname or parts.username or parts.password:
+        raise ValueError("El enlace del aviso tiene que empezar con https://.")
+    return value
+
+
+def csv_text(value: str) -> str:
+    # Evita que una planilla interprete el texto como fórmula.
+    if value.startswith(("\t", "\r", "\n")) or value.lstrip().startswith(("=", "+", "-", "@")):
+        return "'" + value
+    return value
+
+
+def json_body() -> dict:
+    if not request.is_json:
+        raise ValueError("Enviá los datos como JSON.")
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        raise ValueError("Enviá un objeto JSON válido.")
+    return data
 
 
 class DemoClient:
@@ -111,6 +153,75 @@ def create_app(db_path=None, provider=None, test_config=None):
             search_id=sid,
             matches=safe,
             message=f"{len(safe)} avisos encontrados",
+        )
+
+    # ---------- postulaciones ----------
+    def summary(items):
+        return {status: sum(item["status"] == status for item in items) for status in STATUSES}
+
+    @app.get("/api/postulaciones")
+    def list_applications():
+        items = current_app.extensions["store"].list_applications()
+        return jsonify(items=items, counts=summary(items), statuses=list(STATUSES))
+
+    @app.post("/api/postulaciones")
+    def add_application():
+        try:
+            data = json_body()
+            position = text_field(data, "position", 200, required=True)
+            company = text_field(data, "company", 200)
+            url = clean_url(text_field(data, "apply_url", 2000))
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
+        item, created = current_app.extensions["store"].add_application(position, company, url)
+        return jsonify(item=item, created=created), 201 if created else 200
+
+    @app.patch("/api/postulaciones/<int:app_id>")
+    def update_application(app_id: int):
+        try:
+            data = json_body()
+            changes = {}
+            if "status" in data:
+                if data["status"] not in STATUSES:
+                    raise ValueError("Elegí un estado válido.")
+                changes["status"] = data["status"]
+            if "notes" in data:
+                changes["notes"] = text_field(data, "notes", 1000)
+            if not changes:
+                raise ValueError("No hay cambios para guardar.")
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
+        item = current_app.extensions["store"].update_application(app_id, changes)
+        if item is None:
+            return jsonify(error="La postulación no existe."), 404
+        return jsonify(item=item)
+
+    @app.delete("/api/postulaciones/<int:app_id>")
+    def delete_application(app_id: int):
+        if not current_app.extensions["store"].delete_application(app_id):
+            return jsonify(error="La postulación no existe."), 404
+        return jsonify(ok=True)
+
+    @app.get("/api/postulaciones.csv")
+    def export_applications():
+        output = io.StringIO(newline="")
+        writer = csv.writer(output)
+        writer.writerow(["puesto", "empresa", "estado", "notas", "enlace", "actualizada"])
+        for item in current_app.extensions["store"].list_applications():
+            writer.writerow(
+                [
+                    csv_text(item["position"]),
+                    csv_text(item["company"]),
+                    item["status"],
+                    csv_text(item["notes"]),
+                    item["apply_url"],
+                    item["updated_at"],
+                ]
+            )
+        return Response(
+            "﻿" + output.getvalue(),
+            content_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": 'attachment; filename="postulaciones.csv"'},
         )
 
     @app.cli.command("borrar-textos-cv")
